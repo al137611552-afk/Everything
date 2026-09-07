@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $downloads = Join-Path $root 'work\downloads'
-$tools = Join-Path $root 'outputs\QuickPanel-v0.3.2\tools\Everything'
+$tools = Join-Path $root 'outputs\QuickPanel-v0.3.3\tools\Everything'
 New-Item -ItemType Directory -Force -Path $downloads,$tools | Out-Null
 Invoke-WebRequest 'https://www.voidtools.com/ES-1.1.0.37.x64.zip' -OutFile (Join-Path $downloads 'es.zip')
 Invoke-WebRequest 'https://www.voidtools.com/Everything-1.4.1.1032.x64.zip' -OutFile (Join-Path $downloads 'everything.zip')
