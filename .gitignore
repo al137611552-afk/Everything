@@ -1,0 +1,12 @@
+/work/
+/outputs/
+**/data/
+**/bin/
+**/obj/
+*.user
+*.db
+*.ini
+settings.json*
+.env*
+*.pfx
+*.p12

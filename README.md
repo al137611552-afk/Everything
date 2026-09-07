@@ -42,4 +42,3 @@
 - [ES / voidtools](https://github.com/voidtools/ES)：分发时保留 ES-LICENSE.txt。
 
 源码提交不包含第三方二进制、用户数据、密钥或个人桌面截图。
-

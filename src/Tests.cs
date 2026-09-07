@@ -1,0 +1,32 @@
+using System;
+using System.IO;
+using System.Text;
+using System.Linq;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Threading;
+namespace QuickPanel {
+ public static class Tests {
+  static List<string> report=new List<string>();
+  static void Check(bool value,string label){if(!value)throw new Exception("FAIL: "+label);report.Add("PASS: "+label);}
+  public static int LiveSearch(){var name="quickpanel-probe-"+Guid.NewGuid().ToString("N")+".txt";var path=Path.Combine(AppDomain.CurrentDomain.BaseDirectory,name);try{File.WriteAllText(path,"Search integration probe");var s=new Settings();bool matched=false;for(int i=0;i<8&&!matched;i++){try{matched=Services.Files(s,name,CancellationToken.None).GetAwaiter().GetResult().Any(e=>String.Equals(e.Target,path,StringComparison.OrdinalIgnoreCase));}catch(IOException){}if(!matched)Thread.Sleep(700);}File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"live-search-result.txt"),matched?"PASS: real bundled Everything + ES auto-start, file indexing and Unicode CLI path integration.":"FAIL: real Everything probe was not returned.");return matched?0:1;}catch(Exception e){File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"live-search-result.txt"),e.ToString());return 1;}finally{File.Delete(path);SearchRuntime.Stop();}}
+  public static int Run(){try{
+   var system=Services.SystemApps();Check(system.Any(e=>e.Name=="记事本"&&File.Exists(e.Target)),"Notepad discovered independently of Start menu");Check(system.Any(e=>e.Name=="计算器"&&Services.Rank(e,"calc")>0&&Services.Rank(e,"jsq")>0),"Calculator Chinese English and initials aliases");
+   Check(Panel.Mode("find")=="all"&&Panel.Mode("f 合同")=="files","file mode requires explicit prefix");Check(Panel.Mode("git status")=="all"&&Panel.Mode("> git status")=="command","ordinary search never becomes executable command");Check(Panel.Mode("TR hello")=="translate","translation mode prefix");
+   string command="Write-Output '中文 $HOME `echo';\nWrite-Output 'a\"b'";Check(Encoding.Unicode.GetString(Convert.FromBase64String(Services.EncodedCommand(command)))==command,"PowerShell Unicode encoded command roundtrip");Check(Services.Quote("D:\\hello world\\")=="\"D:\\hello world\\\\\"","Windows trailing-slash argument quoting");Check(Services.Quote("a\"b")=="\"a\\\"b\"","Windows embedded-quote argument quoting");
+   Check(Services.Initials("微信")=="wx","common Chinese initials");var item=new Entry{Name="微信",Alias="wx"};Check(Services.Rank(item,"微信")>Services.Rank(item,"wx"),"exact name outranks initial match");
+   try{string secret="test-only-凭据";var protectedValue=Store.Protect(secret);Check(protectedValue!=secret&&Store.Unprotect(protectedValue)==secret,"current-user credential encryption roundtrip");}catch(System.Security.Cryptography.CryptographicException){report.Add("UNVERIFIED: Current-user DPAPI unavailable in isolated test profile. No plaintext fallback. Requires normal desktop-user validation.");}
+   Check(Services.EsArguments("-exit").EndsWith("\"<-exit>\""),"Everything query cannot become a CLI control switch");
+   var files=Services.ParseFiles("\uFEFFD:\\文档\\合同.docx\r\nnot a path\r\nC:\\资料\\a b.txt\r\n");Check(files.Count==2&&files[0].Name=="合同.docx"&&files[1].Target=="C:\\资料\\a b.txt","Unicode file results and invalid-line rejection");
+   bool invalid=false;try{Services.Terminal("echo should-not-run",Path.Combine(Path.GetTempPath(),Guid.NewGuid().ToString()));}catch(IOException){invalid=true;}Check(invalid,"invalid working directory blocks command launch");
+   bool translationInvalid=false;try{Services.Translate(new Settings{Endpoint="http://example.com"},"test","English",CancellationToken.None).GetAwaiter().GetResult();}catch(IOException){translationInvalid=true;}Check(translationInvalid,"translation rejects non-HTTPS before network");
+   var info=new ProcessStartInfo(Services.PowerShell,"-NoProfile -NonInteractive -EncodedCommand "+Services.EncodedCommand("[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Write-Output 'QuickPanel-中文-ok'")){UseShellExecute=false,CreateNoWindow=true,RedirectStandardOutput=true,StandardOutputEncoding=Encoding.UTF8};using(var p=Process.Start(info)){var output=p.StandardOutput.ReadToEnd();p.WaitForExit();Check(p.ExitCode==0&&output.Contains("QuickPanel-中文-ok"),"real PowerShell command handles Chinese output");}
+   var fixture=Environment.GetEnvironmentVariable("QUICKPANEL_TEST_ES");if(!String.IsNullOrEmpty(fixture)&&File.Exists(fixture)){
+    var s=new Settings{EsPath=fixture};var found=Services.Files(s,"ext:txt 测试",CancellationToken.None).GetAwaiter().GetResult();Check(found.Count==1&&found[0].Name=="测试文件.txt","ES process adapter preserves Unicode and query boundaries (fixture)");
+    bool missing=false;try{Services.Files(s,"missing",CancellationToken.None).GetAwaiter().GetResult();}catch(IOException){missing=true;}Check(missing,"ES nonzero exit reports connection failure (fixture)");
+    var cancel=new CancellationTokenSource();cancel.CancelAfter(200);bool cancelled=false;try{Services.Files(s,"slow",cancel.Token).GetAwaiter().GetResult();}catch(OperationCanceledException){cancelled=true;}Check(cancelled,"ES pending process query cancels (fixture)");
+   }
+   report.Add(report.Count(s=>s.StartsWith("PASS:"))+" passed; "+report.Count(s=>s.StartsWith("UNVERIFIED:"))+" environment-limited checks. No network, user-file mutation or clipboard mutation.");File.WriteAllLines(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"test-results.txt"),report,Encoding.UTF8);return 0;
+  }catch(Exception e){report.Add(e.ToString());File.WriteAllLines(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"test-results.txt"),report,Encoding.UTF8);return 1;}}
+ }
+}
